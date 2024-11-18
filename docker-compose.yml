@@ -1,0 +1,41 @@
+version: '3.8'
+
+networks:
+  emissions-network:
+    driver: bridge
+
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - emissions-tracker-network
+    environment:
+      - DJANGO_SETTINGS_MODULE=emissions_tracker.settings
+      - DEBUG=True
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/emissions_tracker_db
+      - ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
+
+  db:
+    image: postgres:15
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      #- postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    env_file:
+      - .env.database
+    networks:
+      - emissions-network
+
+volumes:
+  postgres_data:
+  static_volume:

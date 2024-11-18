@@ -1,0 +1,15 @@
+# Remove virtual environment
+.venv/
+
+# Remove cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Remove repomix
+repomix-output.txt
+
+# Remove env files
+.env
+.env.database

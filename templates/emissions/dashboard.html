@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emissions Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: #25354c;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .card {
+            flex: 1;
+            min-width: 300px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .api-button {
+            display: inline-block;
+            background-color: #10826c;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        .api-button:hover {
+            background-color: #0a5f4f;
+        }
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #10826c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0a5f4f;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+        h1, h2, h3 {
+            color: #10826c;
+        }
+    </style>
+</head>
+<body>
+    <i class="fa fa-home" aria-hidden="true"></i>
+
+    <p>Feel free to switch to the API view to have full functionalities.</p>
+
+    <a href="{% url 'api-root' %}" class="api-button">API Interface</a>
+
+    <h1>Emissions Dashboard</h1>
+
+    <p>Select a report to view its details, sources, and emissions projections.</p>
+
+    <div class="container">
+        <div class="card">
+            <h2>Reports</h2>
+            <select id="reportSelect">
+                <option value="">Select a report</option>
+            </select>
+        </div>
+
+        <div id="reportDetailsCard" class="card" style="display: none;">
+            <h2>Report Details</h2>
+            <div id="reportDetails"></div>
+        </div>
+
+        <div id="sourcesCard" class="card" style="display: none;">
+            <h2>Sources for Report: <span id="selectedReport"></span></h2>
+            <select id="sourceSelect">
+                <option value="">Select a source</option>
+            </select>
+            <button id="showSourceEmissionsBtn" style="display: none; margin-top: 10px;">Show Source Emissions Chart</button>
+        </div>
+
+        <div id="emissionsCard" class="card" style="display: none;">
+            <h2>Projected Emissions</h2>
+            <div style="margin-bottom: 20px;">
+                <label for="startYear">Start Year:</label>
+                <input type="number" id="startYear" min="2000" max="2100" value="2024">
+                <label for="endYear">End Year:</label>
+                <input type="number" id="endYear" min="2000" max="2100" value="2028">
+            </div>
+            <button id="calculateEmissionsBtn" style="margin-bottom: 20px;">Calculate Emissions</button>
+            <div id="loadingIndicator" style="display: none;">Calculating emissions...</div>
+            <canvas id="emissionsChart"></canvas>
+            <table id="emissionsTable">
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Emissions (kg CO2e)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="sourceEmissionsCard" class="card" style="display: none;">
+            <h2>Source Emissions: <span id="selectedSourceName"></span></h2>
+            <div style="margin-bottom: 20px;">
+                <label for="sourceStartYear">Start Year:</label>
+                <input type="number" id="sourceStartYear" min="2000" max="2100" value="2024">
+                <label for="sourceEndYear">End Year:</label>
+                <input type="number" id="sourceEndYear" min="2000" max="2100" value="2028">
+            </div>
+            <button id="calculateSourceEmissionsBtn">Calculate Source Emissions</button>
+            <div id="sourceLoadingIndicator" style="display: none;">Calculating emissions...</div>
+            <canvas id="sourceEmissionsChart"></canvas>
+            <table id="sourceEmissionsTable">
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Emissions (kg CO2e)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="modificationsCard" class="card" style="display: none;">
+            <h2>Modifications for Source: <span id="selectedSource"></span></h2>
+            <div id="existingModifications">
+                <h3>Existing Modifications</h3>
+                <ul id="modificationsList"></ul>
+            </div>
+            <div id="newModification">
+                <h3>Add New Modification</h3>
+                <form id="newModificationForm">
+                    <select id="modificationType" required>
+                        <option value="">Select Type</option>
+                        <option value="VALUE">Value</option>
+                        <option value="EF">Emission Factor</option>
+                    </select>
+                    <input type="number" id="modificationValue" placeholder="Value" required>
+                    <input type="number" id="startYear" placeholder="Start Year" required>
+                    <input type="number" id="endYear" placeholder="End Year (optional)">
+                    <label>
+                        <input type="checkbox" id="isProgressive"> Progressive
+                    </label>
+                    <button type="submit">Add Modification</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© Copyright 2024 - Made with ♥ by Thibault Paillon.</p>
+    </footer>
+
+    <script>
+        let emissionsChart;
+        let sourceEmissionsChart;
+
+        // Fetch reports and populate the select
+        fetch('/api/reports/')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('reportSelect');
+                data.forEach(report => {
+                    const option = document.createElement('option');
+                    option.value = report.id;
+                    option.textContent = report.name;
+                    select.appendChild(option);
+                });
+            });
+
+        // Event listener for report selection
+        document.getElementById('reportSelect').addEventListener('change', function() {
+            const reportId = this.value;
+            if (reportId) {
+                document.getElementById('selectedReport').textContent = this.options[this.selectedIndex].text;
+                document.getElementById('reportDetailsCard').style.display = 'block';
+                document.getElementById('sourcesCard').style.display = 'block';
+                document.getElementById('emissionsCard').style.display = 'block';
+                fetchReportDetails(reportId);
+                fetchSources(reportId);
+            } else {
+                document.getElementById('reportDetailsCard').style.display = 'none';
+                document.getElementById('sourcesCard').style.display = 'none';
+                document.getElementById('emissionsCard').style.display = 'none';
+            }
+        });
+
+        // Fetch report details
+        function fetchReportDetails(reportId) {
+            fetch(`/api/reports/${reportId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    const detailsDiv = document.getElementById('reportDetails');
+                    detailsDiv.innerHTML = `
+                        <p><strong>Name:</strong> ${data.name}</p>
+                        <p><strong>Date:</strong> ${data.date}</p>
+                        <p><strong>Total Emissions:</strong> ${data.total_emissions_cache || 'Not calculated'}</p>
+                    `;
+                });
+        }
+
+        // Fetch sources for a report
+        function fetchSources(reportId) {
+            fetch(`/api/reports/${reportId}/sources/`)
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('sourceSelect');
+                    select.innerHTML = '<option value="">Select a source</option>';
+                    data.forEach(source => {
+                        const option = document.createElement('option');
+                        option.value = source.id;
+                        option.textContent = source.name;
+                        select.appendChild(option);
+                    });
+                });
+        }
+
+        // Event listener for calculate emissions button
+        document.getElementById('calculateEmissionsBtn').addEventListener('click', function() {
+            const reportId = document.getElementById('reportSelect').value;
+            if (reportId) {
+                calculateAndFetchProjectedEmissions(reportId);
+            } else {
+                alert('Please select a report first.');
+            }
+        });
+
+        // Function to calculate and fetch projected emissions
+        function calculateAndFetchProjectedEmissions(reportId) {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = 'block';
+            
+            const startYear = parseInt(document.getElementById('startYear').value);
+            const endYear = parseInt(document.getElementById('endYear').value);
+            
+            if (startYear > endYear) {
+                alert('Start year must be less than or equal to end year');
+                loadingIndicator.style.display = 'none';
+                return;
+            }
+            
+            const years = [];
+            const emissions = [];
+            
+            // Use Promise.all to fetch data for all years in parallel
+            Promise.all(
+                Array.from({length: endYear - startYear + 1}, (_, i) => startYear + i).map(year => 
+                    fetch(`/api/reports/${reportId}/projected-emissions/?year=${year}`)
+                        .then(response => response.json())
+                        .then(data => ({year, emission: data.projected_emissions}))
+                )
+            )
+            .then(results => {
+                results.forEach(({year, emission}) => {
+                    years.push(year.toString());
+                    emissions.push(emission);
+                });
+                updateEmissionsDisplay(years, emissions);
+            })
+            .catch(error => {
+                console.error('Error fetching projected emissions:', error);
+                alert('An error occurred while calculating emissions. Please try again.');
+            })
+            .finally(() => {
+                loadingIndicator.style.display = 'none';
+            });
+        }
+
+        function updateEmissionsDisplay(years, emissions) {
+            console.log('Updating emissions display');
+            console.log('Years:', years);
+            console.log('Emissions:', emissions);
+            
+            const tbody = document.getElementById('emissionsTable').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = '';
+            
+            if (years.length > 0 && emissions.length > 0) {
+                years.forEach((year, index) => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = year;
+                    row.insertCell(1).textContent = typeof emissions[index] === 'number' ? emissions[index].toFixed(2) : emissions[index];
+                });
+                updateEmissionsChart(years, emissions);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="2">No emissions data available</td></tr>';
+                updateEmissionsChart([], []);
+            }
+        }
+        
+        // Update emissions chart
+        function updateEmissionsChart(years, emissions) {
+            console.log('Updating emissions chart with:');
+            console.log('Years:', years);
+            console.log('Emissions:', emissions);
+            
+            const ctx = document.getElementById('emissionsChart').getContext('2d');
+            if (emissionsChart) {
+                console.log('Destroying existing chart');
+                emissionsChart.destroy();
+            }
+            emissionsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: years.length > 0 ? years : ['No Data'],
+                    datasets: [{
+                        label: 'Projected Emissions',
+                        data: emissions.length > 0 ? emissions : [0],
+                        borderColor: '#10826c',
+                        backgroundColor: 'rgba(16, 130, 108, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Emissions (kg CO2e)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Year'
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('Chart created:', emissionsChart);
+        }
+
+        // Add this to your existing event listener for the calculate Emissions button
+        document.getElementById('calculateEmissionsBtn').addEventListener('click', function() {
+            const reportId = document.getElementById('reportSelect').value;
+            if (reportId) {
+                console.log('Calculate button clicked for report ID:', reportId);
+                calculateAndFetchProjectedEmissions(reportId);
+            } else {
+                console.log('No report selected');
+                alert('Please select a report first.');
+            }
+        });
+
+        // Add this to your existing event listener for the calculate Source button
+        document.getElementById('sourceSelect').addEventListener('change', function() {
+            const sourceId = this.value;
+            if (sourceId) {
+                document.getElementById('selectedSource').textContent = this.options[this.selectedIndex].text;
+                document.getElementById('showSourceEmissionsBtn').style.display = 'inline-block';
+                document.getElementById('modificationsCard').style.display = 'block';
+                fetchModifications(sourceId);
+            } else {
+                document.getElementById('showSourceEmissionsBtn').style.display = 'none';
+                document.getElementById('modificationsCard').style.display = 'none';
+                document.getElementById('sourceEmissionsCard').style.display = 'none';
+            }
+        });
+        
+        document.getElementById('showSourceEmissionsBtn').addEventListener('click', function() {
+            const sourceId = document.getElementById('sourceSelect').value;
+            const sourceName = document.getElementById('sourceSelect').options[document.getElementById('sourceSelect').selectedIndex].text;
+            if (sourceId) {
+                document.getElementById('selectedSourceName').textContent = sourceName;
+                document.getElementById('sourceEmissionsCard').style.display = 'block';
+                // Scroll to the sourceEmissionsCard
+                document.getElementById('sourceEmissionsCard').scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+        
+        document.getElementById('calculateSourceEmissionsBtn').addEventListener('click', function() {
+            const sourceId = document.getElementById('sourceSelect').value;
+            if (sourceId) {
+                calculateSourceEmissions(sourceId);
+            } else {
+                alert('Please select a source first.');
+            }
+        });
+        
+        function calculateSourceEmissions(sourceId) {
+            const startYear = document.getElementById('sourceStartYear').value;
+            const endYear = document.getElementById('sourceEndYear').value;
+            const loadingIndicator = document.getElementById('sourceLoadingIndicator');
+            loadingIndicator.style.display = 'block';
+        
+            fetch(`/api/sources/${sourceId}/emissions-by-year/?start_year=${startYear}&end_year=${endYear}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateSourceEmissionsChart(data);
+                    updateSourceEmissionsTable(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching source emissions:', error);
+                    alert('An error occurred while calculating source emissions. Please try again.');
+                })
+                .finally(() => {
+                    loadingIndicator.style.display = 'none';
+                });
+        }
+        
+        function updateSourceEmissionsChart(emissionsData) {
+            const ctx = document.getElementById('sourceEmissionsChart').getContext('2d');
+            const years = Object.keys(emissionsData);
+            const emissions = Object.values(emissionsData);
+        
+            if (sourceEmissionsChart) {
+                sourceEmissionsChart.destroy();
+            }
+        
+            sourceEmissionsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: years,
+                    datasets: [{
+                        label: 'Source Emissions',
+                        data: emissions,
+                        borderColor: '#10826c',
+                        backgroundColor: 'rgba(16, 130, 108, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Emissions (kg CO2e)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Year'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSourceEmissionsTable(emissionsData) {
+            const tbody = document.getElementById('sourceEmissionsTable').getElementsByTagName('tbody')[0];
+            tbody.innerHTML = ''; // Clear existing rows
+        
+            Object.entries(emissionsData).forEach(([year, emission]) => {
+                const row = tbody.insertRow();
+                const yearCell = row.insertCell(0);
+                const emissionCell = row.insertCell(1);
+                
+                yearCell.textContent = year;
+                emissionCell.textContent = typeof emission === 'number' ? emission.toFixed(2) : emission;
+            });
+        }
+
+        // Event listener for source selection
+        document.getElementById('sourceSelect').addEventListener('change', function() {
+            const sourceId = this.value;
+            if (sourceId) {
+                document.getElementById('selectedSource').textContent = this.options[this.selectedIndex].text;
+                document.getElementById('modificationsCard').style.display = 'block';
+                fetchModifications(sourceId);
+            } else {
+                document.getElementById('modificationsCard').style.display = 'none';
+            }
+        });
+
+        // Fetch modifications for a source
+        function fetchModifications(sourceId) {
+            fetch(`/api/sources/${sourceId}/modifications/`)
+                .then(response => response.json())
+                .then(data => {
+                    const list = document.getElementById('modificationsList');
+                    list.innerHTML = '';
+                    data.forEach(mod => {
+                        const li = document.createElement('li');
+                        li.textContent = `${mod.modification_type}: ${mod.value} (${mod.start_year} - ${mod.end_year || 'ongoing'})`;
+                        list.appendChild(li);
+                    });
+                });
+        }
+
+        // Event listener for new modification form
+        document.getElementById('newModificationForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const sourceId = document.getElementById('sourceSelect').value;
+            const newMod = {
+                source: sourceId,
+                modification_type: document.getElementById('modificationType').value,
+                value: document.getElementById('modificationValue').value,
+                start_year: document.getElementById('startYear').value,
+                end_year: document.getElementById('endYear').value || null,
+                is_progressive: document.getElementById('isProgressive').checked
+            };
+            fetch('/api/modifications/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newMod),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                fetchModifications(sourceId);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
+</body>
+</html>
